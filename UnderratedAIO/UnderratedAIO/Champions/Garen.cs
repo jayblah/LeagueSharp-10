@@ -104,6 +104,7 @@ namespace UnderratedAIO.Champions
             }
             if (config.Item("useq", true).GetValue<bool>() && Q.IsReady() &&
                 player.Distance(target) > player.AttackRange && !GarenE && !GarenQ &&
+                player.Distance(target) > Orbwalking.GetRealAutoAttackRange(target) &&
                 CombatHelper.IsPossibleToReachHim(target, 0.30f, new float[5] { 1.5f, 2f, 2.5f, 3f, 3.5f }[Q.Level - 1]))
             {
                 Q.Cast(config.Item("packets").GetValue<bool>());
@@ -129,13 +130,16 @@ namespace UnderratedAIO.Champions
                           player.CountEnemiesInRange(1500) == 1) && getRDamage(target) > targHP && targHP > 0;
             if (rLogic && target.Distance(player) < R.Range)
             {
-                if (GarenE)
+                if (!(GarenE && target.Health < getEDamage(target, true) && target.Distance(player) < E.Range))
                 {
-                    E.Cast(config.Item("packets").GetValue<bool>());
-                }
-                else
-                {
-                    R.Cast(target, config.Item("packets").GetValue<bool>());
+                    if (GarenE)
+                    {
+                        E.Cast(config.Item("packets").GetValue<bool>());
+                    }
+                    else
+                    {
+                        R.Cast(target, config.Item("packets").GetValue<bool>());
+                    }
                 }
             }
             if (config.Item("usew", true).GetValue<bool>() && W.IsReady() && player.CountEnemiesInRange(E.Range) > 0 &&
@@ -145,9 +149,13 @@ namespace UnderratedAIO.Champions
             }
             bool hasFlash = player.Spellbook.CanUseSpell(player.GetSpellSlot("SummonerFlash")) == SpellState.Ready;
             if (config.Item("useFlash", true).GetValue<bool>() && hasFlash && rLogic &&
-                target.Distance(player) < R.Range + 425 && target.Distance(player) > R.Range && !Q.IsReady() &&
+                target.Distance(player) < R.Range + 425 && target.Distance(player) > R.Range + 250 && !Q.IsReady() &&
                 !CombatHelper.IsFacing(target, player.Position) && !GarenQ)
             {
+                if (target.Distance(player) < R.Range + 300 && player.MoveSpeed > target.MoveSpeed)
+                {
+                    return;
+                }
                 if (GarenE)
                 {
                     E.Cast(config.Item("packets").GetValue<bool>());
@@ -191,7 +199,8 @@ namespace UnderratedAIO.Champions
             if (E.IsReady() && !GarenE)
             {
                 damage += getEDamage(hero);
-            }else if (GarenE)
+            }
+            else if (GarenE)
             {
                 damage += getEDamage(hero, true);
             }
@@ -210,11 +219,11 @@ namespace UnderratedAIO.Champions
                       new[] { 28.57, 33.33, 40 }[R.Level - 1] / 100 * (hero.MaxHealth - hero.Health);
             if (hero.HasBuff("garenpassiveenemytarget"))
             {
-                return Damage.CalcDamage(player, hero, Damage.DamageType.True, dmg) - hero.PhysicalShield;
+                return Damage.CalcDamage(player, hero, Damage.DamageType.True, dmg);
             }
             else
             {
-                return Damage.CalcDamage(player, hero, Damage.DamageType.Magical, dmg) - hero.MagicalShield;
+                return Damage.CalcDamage(player, hero, Damage.DamageType.Magical, dmg);
             }
         }
 
@@ -222,19 +231,18 @@ namespace UnderratedAIO.Champions
         public static double[] baseEDamage = new double[] { 15, 18.8, 22.5, 26.3, 30 };
         public static double[] bonusEDamage = new double[] { 34.5, 35.3, 36, 36.8, 37.5 };
 
-        private double getEDamage(Obj_AI_Hero target, bool bufftime=false)
+        private double getEDamage(Obj_AI_Hero target, bool bufftime = false)
         {
             var spins = 0d;
             if (bufftime)
             {
-                spins = CombatHelper.GetBuffTime(player.GetBuff("GarenE")) * GetSpins()/3;
+                spins = CombatHelper.GetBuffTime(player.GetBuff("GarenE")) * GetSpins() / 3;
             }
             else
             {
                 spins = GetSpins();
             }
-            var dmg = (baseEDamage[E.Level - 1] + bonusEDamage[E.Level - 1] / 100 * player.TotalAttackDamage) *
-                      spins;
+            var dmg = (baseEDamage[E.Level - 1] + bonusEDamage[E.Level - 1] / 100 * player.TotalAttackDamage) * spins;
             var bonus = target.HasBuff("garenpassiveenemytarget") ? target.MaxHealth / 100f * spins : 0;
             if (ObjectManager.Get<Obj_AI_Base>().Count(o => o.IsValidTarget() && o.Distance(target) < 650) == 0)
             {
